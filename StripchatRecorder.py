@@ -4,14 +4,11 @@ import os
 import threading
 import sys
 import configparser
-import subprocess
-import queue
 import requests
 import streamlink
-from PySide6 import QtCore, QtWidgets
+from requests import JSONDecodeError
 
 import Utils
-import tkinter as tk
 
 if os.name == 'nt':
     import ctypes
@@ -152,18 +149,20 @@ class Modelo(threading.Thread):
                 f.write(f'\n{datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")} EXCEPTION: {e}\n')
     def isOnline(self):
         try:
-            resp = requests.get(f'https://stripchat.com/api/front/v2/models/username/{self.modelo}/cam').json()
-            hls_url = ''
-            if 'cam' in resp.keys():
-                if resp['cam']['viewServers'] and resp['cam']['isCamAvailable'] and resp['cam']['streamName']:
-                    if 'flashphoner-hls' in resp['cam']['viewServers'].keys():
-                        hls_url = f'https://b-{resp["cam"]["viewServers"]["flashphoner-hls"]}.doppiocdn.com/hls/{resp["cam"]["streamName"]}/{resp["cam"]["streamName"]}.m3u8'
-                        print(hls_url)
-            if len(hls_url):
-                return hls_url
-            else:
+            resp: dict = requests.get(f'https://stripchat.com/api/front/v2/models/username/{self.modelo}/cam').json()
+            cam = resp.get('cam')
+            if cam is None:
                 return False
-        except:
+            if not {'streamName', 'isCamAvailable', 'broadcastSettings'} <= cam.keys():
+                return False
+            if not cam.get('isCamAvailable'):
+                return False
+            quality = cam.get("broadcastSettings").get("presets")
+            qualityData = {"480p": "_480p", "240p": "_240p", "160p": "_160p", }
+            return (f'https://edge-hls.sacdnssedge.com/hls/{cam.get("streamName")}/master/'
+                    f'{cam.get("streamName")}'
+                    f'{next(qualityData.get(d) for d in quality.get("default") if d in qualityData.keys())}.m3u8')
+        except JSONDecodeError:
             return False
 
     def stop(self):
