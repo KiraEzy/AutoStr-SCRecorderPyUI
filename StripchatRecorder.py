@@ -6,6 +6,7 @@ import sys
 import configparser
 import requests
 import streamlink
+from requests import JSONDecodeError
 
 import Utils
 
